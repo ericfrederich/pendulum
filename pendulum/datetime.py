@@ -1828,7 +1828,14 @@ class DateTime(Date, datetime.datetime):
         if dt is None:
             dt = DateTime.now(self._tz)
 
-        return self.add(seconds=int(self.diff(dt, False).in_seconds() / 2))
+        # so we deal with positive numbers below, also forces this operation to be commutative
+        if self > dt:
+            self, dt = dt, self
+
+        diff = self.diff(dt, False)
+        total_micro = (int(diff.total_seconds()) * 1000000 + diff.microseconds)
+        seconds, microseconds = divmod(total_micro // 2, 1000000)
+        return self.add(seconds=seconds, microseconds=microseconds)
 
     def _get_datetime(self, value, pendulum=False):
         """

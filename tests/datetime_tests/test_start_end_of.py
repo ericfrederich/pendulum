@@ -1,3 +1,4 @@
+from itertools import product, tee
 from pendulum import DateTime
 
 from .. import AbstractTestCase
@@ -206,19 +207,46 @@ class StartEndOfTest(AbstractTestCase):
         self.assertIsInstanceOfDateTime(d)
 
     def test_average_from_same(self):
-        d1 = DateTime.create(2000, 1, 31, 2, 3, 4)
-        d2 = DateTime.create(2000, 1, 31, 2, 3, 4).average(d1)
-        self.assertDateTime(d2, 2000, 1, 31, 2, 3, 4)
+        d1 = DateTime.create(2000, 1, 31, 2, 3, 4, 5)
+        d2 = DateTime.create(2000, 1, 31, 2, 3, 4, 5).average(d1)
+        self.assertDateTime(d2, 2000, 1, 31, 2, 3, 4, 5)
 
     def test_average_from_greater(self):
-        d1 = DateTime.create(2000, 1, 1, 1, 1, 1, tz='local')
-        d2 = DateTime.create(2009, 12, 31, 23, 59, 59, tz='local').average(d1)
-        self.assertDateTime(d2, 2004, 12, 31, 12, 30, 30)
+        d1 = DateTime.create(2000, 1, 1, 1, 1, 1, 1, tz='local')
+        d2 = DateTime.create(2009, 12, 31, 23, 59, 59, 999999, tz='local').average(d1)
+        self.assertDateTime(d2, 2004, 12, 31, 12, 30, 30, 500000)
 
     def test_average_from_lower(self):
-        d1 = DateTime.create(2009, 12, 31, 23, 59, 59, tz='local')
-        d2 = DateTime.create(2000, 1, 1, 1, 1, 1, tz='local').average(d1)
-        self.assertDateTime(d2, 2004, 12, 31, 12, 30, 30)
+        d1 = DateTime.create(2009, 12, 31, 23, 59, 59, 999999, tz='local')
+        d2 = DateTime.create(2000, 1, 1, 1, 1, 1, 1, tz='local').average(d1)
+        self.assertDateTime(d2, 2004, 12, 31, 12, 30, 30, 500000)
+
+    def test_average_with_microseconds(self):
+        for d1, d2, expected_average in [
+            # 3ms and 5ms should average to 4
+            ((1982, 12, 4, 1, 2, 3, 3), (1982, 12, 4, 1, 2, 3, 5), (1982, 12, 4, 1, 2, 3, 4)),
+            # 999999ms and subsequent 1ms should average to 0
+            ((1982, 12, 4, 0, 0, 0, 999999), (1982, 12, 4, 0, 0, 1, 1), (1982, 12, 4, 0, 0, 1, 0)),
+            # 1.000002 should average to 0.500001
+            ((2000, 1, 1, 0, 0, 0, 0), (2000, 1, 1, 0, 0, 1, 2), (2000, 1, 1, 0, 0, 0, 500001)),
+        ]:
+            d1 = DateTime.create(*d1)
+            d2 = DateTime.create(*d2)
+            a1 = d1.average(d2)
+            a2 = d2.average(d1)
+            self.assertDateTime(a1, *expected_average)
+            self.assertDateTime(a2, *expected_average)
+
+    def test_average_commutative(self):
+        for d1, d2 in product(*tee([
+            DateTime.create(1981, 10,  9,  1,  2,  3,  4),
+            DateTime.create(1982, 12,  4,  5,  6,  7,  8),
+            DateTime.create(2013,  4, 13,  9, 10, 11, 12),
+            DateTime.create(1982,  9, 24, 13, 14, 15, 16),
+        ])):
+            a1 = d1.average(d2)
+            a2 = d2.average(d1)
+            self.assertEqual(a1, a2)
 
     def start_of_with_invalid_unit(self):
         self.assertRaises(ValueError, DateTime.now().start_of('invalid'))
